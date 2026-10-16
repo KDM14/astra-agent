@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Astra Agent Console</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #38bdf8;
+      --primary-hover: #0284c7;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 24px;
+      line-height: 1.5;
+    }
+    .container { max-width: 1200px; margin: 0 auto; }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    h1 { font-size: 24px; font-weight: 700; color: var(--primary); display: flex; align-items: center; gap: 8px; }
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .badge-info { background: #0369a1; color: #e0f2fe; }
+    .badge-success { background: #15803d; color: #dcfce7; }
+    .badge-warning { background: #b45309; color: #fef3c7; }
+    .badge-danger { background: #b91c1c; color: #fee2e2; }
+
+    .grid { display: grid; grid-template-columns: 1fr 1.5fr; gap: 24px; }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .card h2 { font-size: 18px; margin-bottom: 16px; color: var(--text); }
+    
+    label { display: block; font-size: 13px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; }
+    textarea, input {
+      width: 100%;
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 14px;
+      margin-bottom: 14px;
+    }
+    textarea:focus, input:focus { outline: none; border-color: var(--primary); }
+    button {
+      background: var(--primary);
+      color: #0f172a;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover { background: var(--primary-hover); }
+    .btn-secondary { background: #475569; color: var(--text); margin-left: 8px; }
+    .btn-secondary:hover { background: #64748b; }
+    .btn-danger { background: var(--danger); color: white; }
+    .btn-success { background: var(--success); color: white; }
+
+    .step-item {
+      padding: 12px;
+      border-left: 3px solid var(--border);
+      background: #0f172a;
+      margin-bottom: 10px;
+      border-radius: 0 6px 6px 0;
+    }
+    .step-item.SUCCESS { border-left-color: var(--success); }
+    .step-item.RUNNING { border-left-color: var(--primary); }
+    .step-item.WAITING_APPROVAL { border-left-color: var(--warning); }
+    .step-item.FAILED { border-left-color: var(--danger); }
+    
+    .approval-banner {
+      background: #451a03;
+      border: 1px solid var(--warning);
+      border-radius: 6px;
+      padding: 16px;
+      margin-bottom: 16px;
+      display: none;
+    }
+    pre {
+      background: #090d16;
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      overflow-x: auto;
+      max-height: 250px;
+      color: #38bdf8;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Astra Agent Console</h1>
+      <div>
+        <span id="service-status" class="badge badge-info">Checking Health...</span>
+      </div>
+    </header>
+
+    <div class="grid">
+      <!-- Submission Column -->
+      <div>
+        <div class="card">
+          <h2>Submit Objective</h2>
+          <label>Task Objective</label>
+          <textarea id="objective" rows="4" placeholder="e.g. Calculate '150 * (3.5 + 4.2)' and verify the result"></textarea>
+
+          <label>Timeout (seconds)</label>
+          <input type="number" id="timeout" value="120" min="5" max="600">
+
+          <button id="btn-submit" onclick="submitTask()">Execute Autonomous Task</button>
+        </div>
+
+        <div class="card">
+          <h2>Task State & Summary</h2>
+          <div id="task-meta" style="color: var(--text-muted); font-size: 14px;">No active task.</div>
+        </div>
+      </div>
+
+      <!-- Execution & Observability Column -->
+      <div>
+        <div id="approval-box" class="approval-banner">
+          <h3 style="color: #fbbf24; margin-bottom: 8px;">Action Approval Required</h3>
+          <p id="approval-desc" style="font-size: 14px; margin-bottom: 12px;"></p>
+          <button class="btn-success" onclick="resolveApproval(true)">Approve Action</button>
+          <button class="btn-danger" onclick="resolveApproval(false)">Reject Action</button>
+        </div>
+
+        <div class="card">
+          <h2>Execution Plan & Progress</h2>
+          <div id="steps-container" style="color: var(--text-muted); font-size: 14px;">Plan will appear once execution begins.</div>
+        </div>
+
+        <div class="card">
+          <h2>Verifiable Evidence & Audit Output</h2>
+          <pre id="evidence-output">// Evidence log will stream here...</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentTaskId = null;
+    let pendingApprovalId = null;
+
+    async function checkHealth() {
+      try {
+        const res = await fetch("/api/v1/health");
+        if (res.ok) {
+          const data = await res.json();
+          document.getElementById("service-status").className = "badge badge-success";
+          document.getElementById("service-status").textContent = `ONLINE (${data.provider.toUpperCase()})`;
+        }
+      } catch (e) {
+        document.getElementById("service-status").className = "badge badge-danger";
+        document.getElementById("service-status").textContent = "OFFLINE";
+      }
+    }
+    checkHealth();
+
+    async function submitTask() {
+      const obj = document.getElementById("objective").value.trim();
+      const timeout = parseFloat(document.getElementById("timeout").value);
+      if (!obj) { alert("Please enter an objective."); return; }
+
+      document.getElementById("btn-submit").disabled = true;
+      document.getElementById("btn-submit").textContent = "Executing...";
+      document.getElementById("steps-container").innerHTML = "<p>Analyzing objective and planning...</p>";
+
+      try {
+        const res = await fetch("/api/v1/tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ objective: obj, timeout_seconds: timeout })
+        });
+        const data = await res.json();
+        currentTaskId = data.task_id;
+
+        renderOutput(data);
+      } catch (err) {
+        alert("Error executing task: " + err);
+      } finally {
+        document.getElementById("btn-submit").disabled = false;
+        document.getElementById("btn-submit").textContent = "Execute Autonomous Task";
+      }
+    }
+
+    function renderOutput(data) {
+      const stateBadge = data.success ? "badge-success" : (data.state === "WAITING_FOR_APPROVAL" ? "badge-warning" : "badge-danger");
+      document.getElementById("task-meta").innerHTML = `
+        <p><strong>Task ID:</strong> ${data.task_id}</p>
+        <p><strong>State:</strong> <span class="badge ${stateBadge}">${data.state}</span></p>
+        <p><strong>Duration:</strong> ${data.duration_seconds}s</p>
+        <p><strong>Summary:</strong> ${data.summary}</p>
+      `;
+
+      if (data.state === "WAITING_FOR_APPROVAL") {
+        document.getElementById("approval-box").style.display = "block";
+        document.getElementById("approval-desc").textContent = data.summary;
+      } else {
+        document.getElementById("approval-box").style.display = "none";
+      }
+
+      document.getElementById("evidence-output").textContent = JSON.stringify({
+        evidence: data.evidence,
+        verification_results: data.verification_results,
+      }, null, 2);
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+services:
+  astra-agent:
+    build: .
+    container_name: astra-agent
+    ports:
+      - "8000:8000"
+    environment:
+      - ASTRA_ENVIRONMENT=production
+      - ASTRA_LOG_LEVEL=INFO
+      - ASTRA_DATABASE_URL=postgresql+asyncpg://astra:astrapass@postgres:5432/astra_db
+      - ASTRA_WORKSPACE_DIR=/app/workspace
+      - ASTRA_PROVIDER=deterministic
+    volumes:
+      - astra_workspace:/app/workspace
+      - astra_data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: astra-postgres
+    environment:
+      - POSTGRES_USER=astra
+      - POSTGRES_PASSWORD=astrapass
+      - POSTGRES_DB=astra_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U astra -d astra_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  astra_workspace:
+  astra_data:
+  pgdata:
